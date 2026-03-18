@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shravya's Daily Coach</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,500;0,700;1,300;1,500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg: #FDF6EE; --warm: #F5EBD8; --card: #FFFFFF; --border: #EDE0CE;
+  --accent: #C084FC; --peach: #FB923C; --rose: #FB7185; --mint: #34D399;
+  --gold: #F59E0B; --text: #2D1B0E; --muted: #9B8570; --soft: #7C6AFA;
+}
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.sync-bar { background: #F0FFF8; border-bottom: 1px solid #A7F3D0; padding: 0.4rem 1.5rem; font-size: 0.75rem; color: #065F46; display: flex; align-items: center; gap: 0.5rem; }
+.sync-bar.error { background: #FFF1F2; border-color: #FECDD3; color: #9F1239; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mint); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.header {
+  background: linear-gradient(135deg, #FFF0F5 0%, #F0E8FF 50%, #E8F4FF 100%);
+  padding: 1.8rem 2rem; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+}
+.header h1 { font-family: 'Fraunces', serif; font-size: 1.8rem; font-weight: 700; }
+.header h1 span { background: linear-gradient(135deg, var(--accent), var(--rose)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header p { font-style: italic; color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; font-family: 'Fraunces', serif; }
+.countdown { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 0.8rem 1.4rem; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.05); }
+.countdown .num { font-family: 'Fraunces', serif; font-size: 2rem; font-weight: 700; color: var(--peach); line-height: 1; }
+.countdown .lbl { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; }
+
+.tabs { display: flex; gap: 0.4rem; padding: 1rem 1.5rem; background: white; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { border: none; background: none; padding: 0.5rem 1rem; border-radius: 50px; font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 500; cursor: pointer; color: var(--muted); white-space: nowrap; transition: all 0.2s; }
+.tab:hover { background: var(--warm); color: var(--text); }
+.tab.active { background: var(--accent); color: white; }
+
+.panel { display: none; padding: 1.5rem; max-width: 800px; margin: 0 auto; }
+.panel.active { display: block; }
+
+.checkin-intro { background: linear-gradient(135deg, #FFF0F5, #F5EEFF); border-radius: 20px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid #EDD5FF; }
+.checkin-intro h2 { font-family: 'Fraunces', serif; font-size: 1.3rem; margin-bottom: 0.4rem; }
+.checkin-intro p { color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
+.mood-row { display: flex; gap: 0.6rem; margin: 1rem 0; flex-wrap: wrap; }
+.mood-btn { border: 2px solid var(--border); background: white; border-radius: 50px; padding: 0.5rem 1rem; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
+.mood-btn:hover, .mood-btn.selected { border-color: var(--accent); background: #F5EEFF; color: var(--accent); }
+
+.win-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.8rem; margin: 1rem 0; }
+.win-card { background: white; border: 1.5px solid var(--border); border-radius: 16px; padding: 1rem; cursor: pointer; transition: all 0.2s; text-align: center; position: relative; }
+.win-card:hover { border-color: var(--mint); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(52,211,153,0.15); }
+.win-card.checked { border-color: var(--mint); background: #F0FFF8; }
+.win-card.checked::after { content: '✓'; position: absolute; top: 8px; right: 10px; color: var(--mint); font-weight: 700; font-size: 0.9rem; }
+.win-card .emoji { font-size: 1.5rem; margin-bottom: 0.4rem; }
+.win-card .name { font-size: 0.75rem; font-weight: 500; color: var(--text); }
+.win-card .freq { font-size: 0.65rem; color: var(--muted); margin-top: 0.2rem; }
+
+.coach-box { background: white; border: 1px solid var(--border); border-radius: 20px; overflow: hidden; margin-top: 1.5rem; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+.coach-header { background: linear-gradient(135deg, var(--accent), var(--soft)); padding: 1rem 1.5rem; display: flex; align-items: center; gap: 0.8rem; }
+.coach-avatar { width: 36px; height: 36px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+.coach-header-text h3 { color: white; font-size: 0.95rem; font-weight: 600; }
+.coach-header-text p { color: rgba(255,255,255,0.8); font-size: 0.75rem; }
+.coach-messages { padding: 1.2rem; min-height: 120px; max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.8rem; }
+.msg { padding: 0.8rem 1rem; border-radius: 14px; font-size: 0.85rem; line-height: 1.6; max-width: 92%; animation: msgIn 0.3s ease; }
+@keyframes msgIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+.msg.coach { background: #F5EEFF; border: 1px solid #EDD5FF; align-self: flex-start; border-bottom-left-radius: 4px; }
+.msg.user { background: var(--accent); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg.loading { background: #F5EEFF; border: 1px solid #EDD5FF; align-self: flex-start; color: var(--muted); font-style: italic; }
+.quick-prompts { display: flex; gap: 0.5rem; padding: 0.6rem 1.2rem; overflow-x: auto; scrollbar-width: none; border-top: 1px solid var(--border); }
+.quick-prompts::-webkit-scrollbar { display: none; }
+.qp { border: 1px solid var(--border); background: white; border-radius: 50px; padding: 0.35rem 0.9rem; font-size: 0.72rem; cursor: pointer; white-space: nowrap; color: var(--muted); font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+.qp:hover { border-color: var(--accent); color: var(--accent); background: #F5EEFF; }
+.coach-input-row { display: flex; gap: 0.5rem; padding: 1rem 1.2rem; border-top: 1px solid var(--border); background: #FAFAFA; }
+.coach-input { flex: 1; border: 1px solid var(--border); border-radius: 50px; padding: 0.6rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; outline: none; background: white; transition: border-color 0.2s; }
+.coach-input:focus { border-color: var(--accent); }
+.coach-send { background: var(--accent); border: none; border-radius: 50px; padding: 0.6rem 1.2rem; color: white; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: opacity 0.2s; }
+.coach-send:hover { opacity: 0.85; }
+.coach-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.goals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.goal-card { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem; transition: all 0.2s; }
+.goal-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+.goal-card .gc-top { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem; }
+.goal-card .gc-icon { font-size: 1.3rem; }
+.goal-card .gc-title { font-size: 0.9rem; font-weight: 600; }
+.goal-card .gc-goal { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.6rem; font-style: italic; font-family: 'Fraunces', serif; }
+.progress-bar { background: var(--warm); border-radius: 50px; height: 8px; overflow: hidden; margin-bottom: 0.4rem; }
+.progress-fill { height: 100%; border-radius: 50px; transition: width 0.8s ease; }
+.progress-label { font-size: 0.7rem; color: var(--muted); display: flex; justify-content: space-between; }
+
+.exam-card { background: white; border: 1px solid var(--border); border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+.exam-top { background: linear-gradient(135deg, #1E1B2E, #3B1F6A); padding: 1.5rem; color: white; }
+.exam-top h2 { font-family: 'Fraunces', serif; font-size: 1.2rem; }
+.exam-top p { font-size: 0.8rem; opacity: 0.7; margin-top: 0.3rem; }
+.topic-pills { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+.topic-pill { border: 1px solid rgba(255,255,255,0.2); border-radius: 50px; padding: 0.3rem 0.8rem; font-size: 0.72rem; cursor: pointer; transition: all 0.2s; color: rgba(255,255,255,0.7); background: rgba(255,255,255,0.05); font-family: 'DM Sans', sans-serif; }
+.topic-pill:hover, .topic-pill.active { background: var(--accent); border-color: var(--accent); color: white; }
+.exam-body { padding: 1.5rem; }
+.question-box { background: var(--warm); border-radius: 14px; padding: 1.2rem; margin-bottom: 1rem; }
+.question-box .q-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 0.5rem; }
+.question-box .q-text { font-size: 0.95rem; font-weight: 500; line-height: 1.5; }
+.options { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
+.option { border: 1.5px solid var(--border); background: white; border-radius: 12px; padding: 0.8rem 1rem; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; text-align: left; font-family: 'DM Sans', sans-serif; color: var(--text); line-height: 1.4; }
+.option:hover:not(:disabled) { border-color: var(--accent); background: #F5EEFF; }
+.option.correct { border-color: var(--mint); background: #F0FFF8; color: #065F46; }
+.option.wrong { border-color: var(--rose); background: #FFF1F2; color: #9F1239; }
+.option.reveal { border-color: var(--mint); background: #F0FFF8; color: #065F46; }
+.feedback-box { background: var(--warm); border-radius: 14px; padding: 1rem 1.2rem; font-size: 0.85rem; line-height: 1.6; color: var(--text); margin-bottom: 1rem; display: none; animation: msgIn 0.3s ease; border-left: 3px solid var(--accent); }
+.btn { padding: 0.7rem 1.4rem; border-radius: 50px; border: none; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: var(--accent); color: white; }
+.btn-primary:hover { opacity: 0.85; }
+.btn-outline { background: white; border: 1.5px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.exam-actions { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+
+.streak-bar { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem; display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.streak-num { font-family: 'Fraunces', serif; font-size: 2.5rem; font-weight: 700; color: var(--peach); line-height: 1; min-width: 60px; }
+.streak-info h3 { font-size: 0.95rem; font-weight: 600; }
+.streak-info p { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+.streak-dots { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.s-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: var(--muted); transition: all 0.2s; border: 2px solid transparent; }
+.s-dot.done { background: var(--mint); color: white; border-color: #059669; }
+.s-dot.today { border-color: var(--peach); background: #FFF0E8; color: var(--peach); }
+
+.journal-area { background: white; border: 1px solid var(--border); border-radius: 20px; padding: 1.5rem; margin-bottom: 1rem; }
+.journal-area h2 { font-family: 'Fraunces', serif; font-size: 1.2rem; margin-bottom: 0.3rem; }
+.journal-area > p { color: var(--muted); font-size: 0.8rem; font-style: italic; font-family: 'Fraunces', serif; margin-bottom: 1rem; }
+.journal-prompt { background: linear-gradient(135deg, #FFF0F5, #F5EEFF); border-radius: 12px; padding: 0.8rem 1rem; font-size: 0.85rem; color: var(--text); margin-bottom: 0.8rem; border-left: 3px solid var(--accent); font-style: italic; font-family: 'Fraunces', serif; }
+textarea { width: 100%; border: 1.5px solid var(--border); border-radius: 12px; padding: 0.8rem; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; color: var(--text); resize: vertical; min-height: 100px; outline: none; line-height: 1.6; background: var(--bg); transition: border-color 0.2s; }
+textarea:focus { border-color: var(--accent); }
+.save-btn { margin-top: 0.8rem; background: var(--accent); color: white; border: none; border-radius: 50px; padding: 0.6rem 1.4rem; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; cursor: pointer; transition: opacity 0.2s; }
+.save-btn:hover { opacity: 0.85; }
+.saved-entries { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1rem; }
+.entry { background: var(--warm); border-radius: 12px; padding: 0.8rem 1rem; font-size: 0.82rem; line-height: 1.5; border: 1px solid var(--border); }
+.entry .entry-date { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.3rem; }
+.section-title { font-family: 'Fraunces', serif; font-size: 1.1rem; margin-bottom: 0.8rem; color: var(--text); }
+.italic-note { font-family: 'Fraunces', serif; font-style: italic; color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; }
+.loading-overlay { position: fixed; inset: 0; background: rgba(253,246,238,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; gap: 1rem; }
+.loading-overlay p { font-family: 'Fraunces', serif; font-style: italic; color: var(--muted); font-size: 1rem; }
+.spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  .header { padding: 1.2rem; } .header h1 { font-size: 1.4rem; }
+  .panel { padding: 1rem; } .goals-grid { grid-template-columns: 1fr; }
+  .win-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <p>Loading your data... 🌸</p>
+</div>
+
+<!-- SYNC STATUS -->
+<div class="sync-bar" id="syncBar">
+  <div class="sync-dot"></div>
+  <span id="syncText">Connected to database</span>
+</div>
+
+<!-- NOT STARTED BANNER -->
+<div id="notStartedBanner" style="display:none; background:linear-gradient(135deg,#FFF0F5,#F5EEFF); border-bottom:1px solid #EDD5FF; padding:1rem 2rem; align-items:center; gap:1rem; flex-wrap:wrap; justify-content:center; text-align:center;">
+  <div>
+    <div style="font-family:'Fraunces',serif; font-size:1.1rem; font-weight:700; color:#2D1B0E;">🌅 Your journey starts tomorrow, March 18th!</div>
+    <div style="font-size:0.82rem; color:#9B8570; margin-top:0.3rem; font-family:'Fraunces',serif; font-style:italic;">Get some rest tonight — Day 1 begins in <strong id="hoursUntilStart">—</strong> hours. You've got this. 🌸</div>
+  </div>
+</div>
+
+<div class="header">
+  <div>
+    <h1>Hey <span>Shravya</span> 🌸</h1>
+    <p id="dayNumber" style="font-style:italic; color:var(--muted); font-size:0.85rem; margin-top:0.2rem; font-family:'Fraunces',serif;">Progress, not perfection. You're already doing great.</p>
+  </div>
+  <div class="countdown">
+    <div class="num" id="daysLeft">75</div>
+    <div class="lbl">days to June 1st</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showPanel('checkin', this)">🌞 Daily Check-in</button>
+  <button class="tab" onclick="showPanel('goals', this)">🎯 My Goals</button>
+  <button class="tab" onclick="showPanel('exam', this)">🏛️ Exam Coach</button>
+  <button class="tab" onclick="showPanel('kaizen', this)">✨ Kaizen</button>
+  <button class="tab" onclick="showPanel('journal', this)">📓 Journal</button>
+</div>
+
+<!-- DAILY CHECK-IN -->
+<div class="panel active" id="panel-checkin">
+  <div class="checkin-intro">
+    <h2>How are you feeling today? 🌸</h2>
+    <p>No pressure. Just pick what feels true. One thing forward is enough.</p>
+    <div class="mood-row">
+      <button class="mood-btn" onclick="selectMood(this)">✨ Energised</button>
+      <button class="mood-btn" onclick="selectMood(this)">😌 Calm</button>
+      <button class="mood-btn" onclick="selectMood(this)">😴 Tired</button>
+      <button class="mood-btn" onclick="selectMood(this)">😤 Stressed</button>
+      <button class="mood-btn" onclick="selectMood(this)">🥰 Happy</button>
+      <button class="mood-btn" onclick="selectMood(this)">😶 Meh</button>
+    </div>
+  </div>
+  <p class="italic-note">Tap anything you did today — big or tiny, it all counts 💛</p>
+  <div class="win-grid" id="winGrid"></div>
+  <div class="coach-box">
+    <div class="coach-header">
+      <div class="coach-avatar">🌸</div>
+      <div class="coach-header-text"><h3>Your Daily Coach</h3><p>Ask me anything — I'm here for you</p></div>
+    </div>
+    <div class="coach-messages" id="coachMessages">
+      <div class="msg coach">Hey Shravya! 🌸 Tell me how today went, or ask me for a nudge in any area. You don't have to be perfect. Just be here.</div>
+    </div>
+    <div class="quick-prompts">
+      <button class="qp" onclick="quickPrompt('I need some motivation right now')">Need motivation 💫</button>
+      <button class="qp" onclick="quickPrompt('What should my 1% improvement be today?')">My 1% today?</button>
+      <button class="qp" onclick="quickPrompt('I missed some things today and feel guilty')">Feeling guilty 💛</button>
+      <button class="qp" onclick="quickPrompt('Give me one tiny win I can do right now')">Tiny win now</button>
+      <button class="qp" onclick="quickPrompt('How do I stay consistent without being a perfectionist?')">Beat perfectionism</button>
+      <button class="qp" onclick="quickPrompt('Quiz me on Claude architecture for 2 minutes')">Quick exam quiz 🏛️</button>
+    </div>
+    <div class="coach-input-row">
+      <input class="coach-input" id="coachInput" placeholder="Talk to your coach..." onkeydown="if(event.key==='Enter')sendCoach()">
+      <button class="coach-send" id="coachSendBtn" onclick="sendCoach()">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- GOALS -->
+<div class="panel" id="panel-goals">
+  <p class="italic-note">Every check-in moves these bars. Real data. Real progress. 🌸</p>
+  <div class="goals-grid" id="goalsGrid"></div>
+</div>
+
+<!-- EXAM -->
+<div class="panel" id="panel-exam">
+  <div class="exam-card">
+    <div class="exam-top">
+      <h2>🏛️ Claude Certified Architect</h2>
+      <p>Weekends only · Beginner · June 1st · MCQ style</p>
+      <div class="topic-pills">
+        <button class="topic-pill active" onclick="setTopic(this,'prompt')">Prompt Engineering</button>
+        <button class="topic-pill" onclick="setTopic(this,'api')">API & Models</button>
+        <button class="topic-pill" onclick="setTopic(this,'safety')">Safety & CAI</button>
+        <button class="topic-pill" onclick="setTopic(this,'agentic')">Agentic Systems</button>
+        <button class="topic-pill" onclick="setTopic(this,'mixed')">🎲 Mix it up</button>
+      </div>
+    </div>
+    <div class="exam-body">
+      <div class="question-box">
+        <div class="q-label">Question <span id="qNum">1</span> · <span id="qScore" style="color:var(--mint)">0 correct so far</span></div>
+        <div class="q-text" id="qText">Loading...</div>
+      </div>
+      <div class="options" id="optionsBox"></div>
+      <div class="feedback-box" id="feedbackBox"></div>
+      <div class="exam-actions">
+        <button class="btn btn-primary" id="nextBtn" onclick="loadQuestion()" style="display:none">Next question →</button>
+        <button class="btn btn-outline" onclick="getHint()">💡 Hint</button>
+      </div>
+    </div>
+  </div>
+  <div class="coach-box" style="margin-top:1.5rem">
+    <div class="coach-header">
+      <div class="coach-avatar">🏛️</div>
+      <div class="coach-header-text"><h3>Explain it to me</h3><p>Ask me any concept — I'll make it beginner-friendly</p></div>
+    </div>
+    <div class="coach-messages" id="examMessages">
+      <div class="msg coach">Ask me to explain any concept and I'll break it down simply. You're a complete beginner and that's totally fine 🌸</div>
+    </div>
+    <div class="quick-prompts">
+      <button class="qp" onclick="examPrompt('Explain prompt engineering like I am a complete beginner')">Prompt engineering?</button>
+      <button class="qp" onclick="examPrompt('What is Constitutional AI in simple terms?')">What is CAI?</button>
+      <button class="qp" onclick="examPrompt('Explain agentic AI simply')">Agentic systems?</button>
+      <button class="qp" onclick="examPrompt('What are Haiku, Sonnet and Opus and when to use each?')">Claude models?</button>
+    </div>
+    <div class="coach-input-row">
+      <input class="coach-input" id="examInput" placeholder="Ask me to explain anything..." onkeydown="if(event.key==='Enter')sendExam()">
+      <button class="coach-send" id="examSendBtn" onclick="sendExam()">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- KAIZEN -->
+<div class="panel" id="panel-kaizen">
+  <div class="streak-bar">
+    <div class="streak-num" id="streakNum">0</div>
+    <div class="streak-info">
+      <h3>Day streak 🔥</h3>
+      <p>1% better every day → 75% better by June 1st</p>
+      <div class="streak-dots" id="streakDots"></div>
+    </div>
+  </div>
+  <div class="journal-area">
+    <h2>Today's 1% ✨</h2>
+    <p>What's one tiny thing you improved or showed up for today?</p>
+    <div class="journal-prompt" id="kaizenPrompt"></div>
+    <textarea id="kaizenText" placeholder="Even the tiniest thing counts..."></textarea>
+    <button class="save-btn" onclick="saveKaizen()">Log my 1% 🌸</button>
+  </div>
+  <h3 class="section-title">Past wins 💛</h3>
+  <div id="kaizenEntries" class="saved-entries"></div>
+</div>
+
+<!-- JOURNAL -->
+<div class="panel" id="panel-journal">
+  <div class="journal-area">
+    <h2>Daily Journal 📓</h2>
+    <p>No rules. No judgment. Just write what's true for you right now.</p>
+    <div class="journal-prompt" id="journalPrompt"></div>
+    <textarea id="journalText" placeholder="Whatever's on your mind..." style="min-height:140px;"></textarea>
+    <button class="save-btn" onclick="saveJournal()">Save entry 🌸</button>
+  </div>
+  <h3 class="section-title">Past entries</h3>
+  <div id="journalEntries" class="saved-entries"></div>
+</div>
+
+<script>
+// ── SUPABASE SETUP ────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://dgdpoajstozsikjwbecl.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_6Pye03NS2gL3_zYhmXeFaw_lGEOgWS6';
+const USER_ID = 'shravya'; // fixed user
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+function setSyncStatus(ok, msg) {
+  const bar = document.getElementById('syncBar');
+  const txt = document.getElementById('syncText');
+  bar.className = 'sync-bar' + (ok ? '' : ' error');
+  txt.textContent = msg;
+}
+
+// ── DATES ─────────────────────────────────────────────────────────────────────
+const START_DATE = new Date('2026-03-18');
+const JUNE1 = new Date('2026-06-01');
+const TODAY_STR = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+function getDayNumber() {
+  return Math.max(1, Math.floor((new Date() - START_DATE) / 86400000) + 1);
+}
+
+function checkStartDate() {
+  const now = new Date();
+  const banner = document.getElementById('notStartedBanner');
+  if (now < START_DATE) {
+    banner.style.display = 'flex';
+    document.getElementById('hoursUntilStart').textContent = Math.ceil((START_DATE - now) / 3600000);
+  } else {
+    banner.style.display = 'none';
+    document.getElementById('dayNumber').textContent = `Day ${getDayNumber()} of 75`;
+  }
+}
+
+(function() {
+  const diff = Math.ceil((JUNE1 - new Date()) / 86400000);
+  document.getElementById('daysLeft').textContent = Math.max(0, diff);
+  checkStartDate();
+})();
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+const S = {
+  mood: '',
+  checked: new Set(),
+  streak: 0,
+  kaizenEntries: [],
+  journalEntries: [],
+  checkHistory: [],  // [{date, checks:[]}]
+  examTopic: 'prompt',
+  qNum: 0, score: 0, total: 0, answered: false
+};
+
+// ── SUPABASE DB HELPERS ───────────────────────────────────────────────────────
+async function dbGet(table) {
+  const { data, error } = await db.from(table).select('*').eq('user_id', USER_ID);
+  if (error) throw error;
+  return data || [];
+}
+
+async function dbUpsert(table, row) {
+  const { error } = await db.from(table).upsert({ ...row, user_id: USER_ID }, { onConflict: 'user_id,date' });
+  if (error) throw error;
+}
+
+async function dbInsert(table, row) {
+  const { error } = await db.from(table).insert({ ...row, user_id: USER_ID });
+  if (error) throw error;
+}
+
+async function dbUpsertSingle(table, row) {
+  const { error } = await db.from(table).upsert({ ...row, user_id: USER_ID }, { onConflict: 'user_id' });
+  if (error) throw error;
+}
+
+// ── INIT: LOAD ALL DATA ───────────────────────────────────────────────────────
+async function initApp() {
+  try {
+    // 1. Load today's check-ins
+    const checkins = await dbGet('checkins');
+    const todayRow = checkins.find(r => r.date === TODAY_STR);
+    if (todayRow && todayRow.checked_ids) {
+      S.checked = new Set(todayRow.checked_ids);
+    }
+
+    // 2. Load full check history for progress bars
+    S.checkHistory = checkins.map(r => ({ date: r.date, checks: r.checked_ids || [] }));
+
+    // 3. Load streak
+    const streakRows = await dbGet('streak');
+    if (streakRows.length > 0) S.streak = streakRows[0].count || 0;
+
+    // 4. Load kaizen entries
+    const kaizenRows = await dbGet('kaizen');
+    S.kaizenEntries = kaizenRows.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+    // 5. Load journal entries
+    const journalRows = await dbGet('journal');
+    S.journalEntries = journalRows.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+    setSyncStatus(true, '✓ All data loaded from database');
+  } catch (e) {
+    console.error(e);
+    setSyncStatus(false, '⚠ Could not connect to database — run the SQL setup first');
+  }
+
+  // Render everything
+  renderWins();
+  renderGoals();
+  renderKaizen();
+  renderJournal();
+  loadQuestion();
+
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function showPanel(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'goals') renderGoals();
+  if (name === 'kaizen') renderKaizen();
+  if (name === 'journal') renderJournal();
+}
+
+// ── WIN CARDS ─────────────────────────────────────────────────────────────────
+const wins = [
+  {e:'🌅',n:'Morning routine',f:'Daily'},{e:'🫶',n:'Anastasia massage',f:'Daily'},
+  {e:'💊',n:'Supplements',f:'Daily'},{e:'💧',n:'Pre-food water',f:'Daily'},
+  {e:'🥗',n:'Fruits & veggies',f:'Daily'},{e:'🚫🍬',n:'No sugar',f:'Daily'},
+  {e:'☀️',n:'Sun exposure',f:'Daily'},{e:'👟',n:'6K steps',f:'Daily'},
+  {e:'💪',n:'Workout',f:'Daily'},{e:'🧘',n:'Pilates',f:'3x/week'},
+  {e:'🎬',n:'Accelerator video',f:'Daily'},{e:'📱',n:'Message partner',f:'Daily'},
+  {e:'🏆',n:'Post wins',f:'Daily'},{e:'🌙',n:'Night routine',f:'Daily'},
+  {e:'😴',n:'8hr sleep',f:'Daily'},{e:'📓',n:'Journaled',f:'Daily'},
+  {e:'📆',n:'Pod meeting',f:'Weekly'},{e:'💼',n:'CSX work',f:'Daily'},
+  {e:'📈',n:'Stocks',f:'Daily'},{e:'🏛️',n:'Exam study',f:'Weekends'},
+  {e:'💬',n:'Small talk',f:'Daily'},{e:'👯',n:'Friendships',f:'Weekly'},
+  {e:'💰',n:'Budgeting',f:'Daily'},{e:'🌿',n:'Castor oil',f:'Daily'},
+];
+
+function renderWins() {
+  document.getElementById('winGrid').innerHTML = wins.map((w,i) => `
+    <div class="win-card ${S.checked.has(i)?'checked':''}" onclick="toggleWin(${i},this)">
+      <div class="emoji">${w.e}</div>
+      <div class="name">${w.n}</div>
+      <div class="freq">${w.f}</div>
+    </div>`).join('');
+}
+
+async function toggleWin(i, el) {
+  S.checked.has(i) ? S.checked.delete(i) : S.checked.add(i);
+  el.classList.toggle('checked', S.checked.has(i));
+
+  // Update history in memory
+  const existing = S.checkHistory.findIndex(h => h.date === TODAY_STR);
+  const todayChecks = [...S.checked];
+  if (existing >= 0) S.checkHistory[existing].checks = todayChecks;
+  else S.checkHistory.push({ date: TODAY_STR, checks: todayChecks });
+
+  // Save to Supabase
+  try {
+    await dbUpsert('checkins', { date: TODAY_STR, checked_ids: todayChecks });
+    setSyncStatus(true, '✓ Saved');
+  } catch(e) {
+    setSyncStatus(false, '⚠ Could not save — check connection');
+  }
+}
+
+function selectMood(btn) {
+  S.mood = btn.textContent;
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+// ── GOALS ─────────────────────────────────────────────────────────────────────
+const TOTAL_DAYS = 75;
+const goals = [
+  {i:'⚖️', t:'Weight Goal',        g:'Reach 121 lbs by June 1',       c:'#FB923C', ids:[4,5,7,8,9]},
+  {i:'🧘', t:'Pilates',            g:'3x/week consistently',           c:'#A78BFA', ids:[9]},
+  {i:'🏛️', t:'Architect Exam',     g:'Pass by June 1st',               c:'#6366F1', ids:[19]},
+  {i:'🌿', t:'ABRAM Program',      g:'Complete daily habits',          c:'#34D399', ids:[3,4,5,6,7,8,10,11,12]},
+  {i:'🚫🍬',t:'No Sugar',          g:'Build the habit for life',       c:'#FB7185', ids:[5]},
+  {i:'💼', t:'Work & Career',      g:'CSX + AI Factory goals',         c:'#60A5FA', ids:[17,18,19]},
+  {i:'💰', t:'Finances',           g:'Budgeting habit locked in',      c:'#FBBF24', ids:[22]},
+  {i:'💬', t:'Small Talk',         g:'Noticeably more comfortable',    c:'#F472B6', ids:[20]},
+  {i:'🤝', t:'Relationships',      g:'Friendships nurtured',           c:'#C084FC', ids:[21]},
+  {i:'✨', t:'Self-care Routines', g:'Skin + hair + body consistent',  c:'#FB923C', ids:[0,1,2,13,23]},
+];
+
+function calcProgress(ids) {
+  if (S.checkHistory.length === 0) return 0;
+  const daysHit = S.checkHistory.filter(day =>
+    ids.some(id => (day.checks || []).includes(id))
+  ).length;
+  return Math.min(100, Math.round((daysHit / TOTAL_DAYS) * 100));
+}
+
+function renderGoals() {
+  document.getElementById('goalsGrid').innerHTML = goals.map(g => {
+    const p = calcProgress(g.ids);
+    return `
+    <div class="goal-card">
+      <div class="gc-top"><span class="gc-icon">${g.i}</span><span class="gc-title">${g.t}</span></div>
+      <div class="gc-goal">"${g.g}"</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${g.c}"></div></div>
+      <div class="progress-label"><span>${p}% so far</span><span>June 1 🎯</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ── EXAM ──────────────────────────────────────────────────────────────────────
+const Q = {
+  prompt: [
+    {q:'What is "few-shot prompting"?',o:['Using minimal tokens','Providing examples to guide the model','Writing very short messages','Reducing hallucinations'],a:1,e:'Few-shot prompting means giving Claude examples of what you want before your actual request. It helps the model understand the pattern you\'re looking for.'},
+    {q:'Which element controls Claude\'s behavior most powerfully?',o:['Temperature setting','User message','System prompt','Max tokens'],a:2,e:'The system prompt is your most powerful tool — it sets Claude\'s role, tone, rules, and context for the entire conversation.'},
+    {q:'Chain-of-thought prompting helps most with:',o:['Faster responses','Step-by-step reasoning','More creative writing','Reducing costs'],a:1,e:'Asking Claude to "think step by step" dramatically improves accuracy on math, logic, and multi-step problems.'},
+    {q:'Temperature controls:',o:['Response speed','Token limit','Randomness of output','Context window'],a:2,e:'Higher temperature = more creative. Lower = more predictable. Use low temp for factual tasks.'},
+    {q:'XML tags in prompts help Claude:',o:['Format HTML','Connect to APIs','Organize different parts of your prompt clearly','Enable tool use'],a:2,e:'Claude is trained to understand XML-like tags like <context> and <instructions> — they help structure prompts clearly.'},
+  ],
+  api: [
+    {q:'Which Claude model is fastest for lightweight tasks?',o:['Opus','Sonnet','Haiku','Base'],a:2,e:'Haiku is fastest and cheapest. Sonnet balances speed and capability. Opus is most powerful for complex reasoning.'},
+    {q:'The "system" parameter in Messages API defines:',o:['Model version','Claude\'s behavior and context','Token output limit','Streaming settings'],a:1,e:'The system parameter is your system prompt — it sets Claude\'s behavior before the user says anything.'},
+    {q:'A context window is:',o:['The chat UI','Max text Claude can process in one request','A cache of responses','Streaming buffer'],a:1,e:'The context window is Claude\'s working memory — total text (input + output) it can handle at once.'},
+    {q:'Tool use in Claude allows:',o:['Auto internet browsing','Calling your defined functions','Writing and executing code','Accessing files'],a:1,e:'Tool use lets you define functions and Claude decides when to call them and uses the results in its response.'},
+    {q:'Streaming responses are useful because:',o:['Reduce costs','Allow longer thinking','Deliver tokens progressively for better UX','Bypass rate limits'],a:2,e:'Streaming sends tokens as generated instead of waiting — makes apps feel fast and real-time.'},
+  ],
+  safety: [
+    {q:'Constitutional AI trains models by:',o:['Human feedback only','Self-critiquing against principles','Game environments','Rule-based filters'],a:1,e:'CAI gives Claude a "constitution" — principles it uses to critique and revise its own outputs, making it safer at scale.'},
+    {q:'HHH stands for:',o:['High-performance, High-speed, High-accuracy','Human, Hybrid, Hierarchical','Helpful, Harmless, Honest','Hallucination, Heuristics, Handling'],a:2,e:'HHH is Anthropic\'s core philosophy — every response should be Helpful, Harmless, and Honest.'},
+    {q:'Prompt injection attempts to:',o:['Increase tokens','Speed up generation','Override instructions through malicious input','Access training data'],a:2,e:'Prompt injection smuggles instructions into Claude\'s input to make it ignore its original instructions — a real risk in RAG systems.'},
+    {q:'RLAIF differs from RLHF because:',o:['No feedback at all','Code only','Feedback from AI not humans','Skips reward model'],a:2,e:'RLHF = human raters. RLAIF = AI model raters. RLAIF scales more cheaply — part of how CAI works.'},
+    {q:'Anthropic\'s Responsible Scaling Policy ensures:',o:['Faster responses','Safety evals before deploying more capable models','Lower pricing','Limited creativity'],a:1,e:'The RSP commits Anthropic to safety evaluations at each capability level before releasing more powerful models.'},
+  ],
+  agentic: [
+    {q:'In multi-agent systems, the orchestrator:',o:['Stores history','Executes tool calls','Directs tasks and coordinates subagents','Manages rate limits'],a:2,e:'The orchestrator is the manager — it breaks down goals, assigns subtasks to subagents, and synthesizes results.'},
+    {q:'MCP (Model Context Protocol) is used to:',o:['Compress prompts','Fine-tune Claude','Monitor billing','Standardize AI connections to tools and data'],a:3,e:'MCP is an open standard by Anthropic for connecting AI models to tools and services — a universal plug for AI. You already use it at CSX!'},
+    {q:'"Human-in-the-loop" means:',o:['Human writes all prompts','Human reviews key agent actions','Agent can\'t run unsupervised','Humans provide live training data'],a:1,e:'Human-in-the-loop adds human approval at key checkpoints — especially before irreversible actions.'},
+    {q:'Vector databases in agentic systems are used to:',o:['Speed up tokens','Replace system prompt','Store and retrieve info beyond context window','Reduce costs'],a:2,e:'Vector databases are long-term memory for agents — store and semantically search large info beyond the context window. You use Pinecone at CSX!'},
+    {q:'In LangGraph, a node represents:',o:['A database entry','Only an LLM call','A step or function in the agent workflow','A memory unit'],a:2,e:'LangGraph nodes are steps — LLM calls, tool calls, or any function. Edges define the flow between them.'},
+  ],
+};
+Q.mixed = [...Q.prompt.slice(0,2),...Q.api.slice(0,2),...Q.safety.slice(0,1),...Q.agentic.slice(0,2)];
+
+let currentQ = null;
+
+function setTopic(btn, topic) {
+  document.querySelectorAll('.topic-pill').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  S.examTopic = topic; S.qNum = 0; S.score = 0; S.total = 0;
+  document.getElementById('qScore').textContent = '0 correct so far';
+  loadQuestion();
+}
+
+function loadQuestion() {
+  const qs = Q[S.examTopic];
+  currentQ = qs[S.qNum % qs.length];
+  S.qNum++; S.answered = false;
+  document.getElementById('qNum').textContent = S.total + 1;
+  document.getElementById('qText').textContent = currentQ.q;
+  document.getElementById('feedbackBox').style.display = 'none';
+  document.getElementById('nextBtn').style.display = 'none';
+  document.getElementById('optionsBox').innerHTML = currentQ.o.map((o,i) =>
+    `<button class="option" onclick="selectOption(${i},this)">${String.fromCharCode(65+i)}) ${o}</button>`
+  ).join('');
+}
+
+function selectOption(i, btn) {
+  if (S.answered) return;
+  S.answered = true; S.total++;
+  document.querySelectorAll('.option').forEach(b => b.disabled = true);
+  const correct = i === currentQ.a;
+  btn.classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) document.querySelectorAll('.option')[currentQ.a].classList.add('reveal');
+  if (correct) S.score++;
+  document.getElementById('qScore').textContent = `${S.score} of ${S.total} correct`;
+  const fb = document.getElementById('feedbackBox');
+  fb.style.display = 'block';
+  fb.innerHTML = (correct ? '✅ Yes! ' : '💛 Not quite — ') + currentQ.e;
+  document.getElementById('nextBtn').style.display = 'inline-block';
+}
+
+function getHint() {
+  const fb = document.getElementById('feedbackBox');
+  fb.style.display = 'block';
+  fb.innerHTML = '💡 Eliminate the obviously wrong answers first, then go with your gut. Every wrong answer still teaches you something!';
+}
+
+// ── KAIZEN ────────────────────────────────────────────────────────────────────
+const kP = [
+  'What\'s one thing that felt easier today than yesterday?',
+  'What did you do today that your future self will thank you for?',
+  'What\'s one habit you showed up for, even imperfectly?',
+  'What tiny discomfort did you lean into today?',
+  'What did you learn about yourself today?',
+  'What\'s one moment you\'re proud of from today?',
+  'How did you take care of your body or mind today?',
+];
+
+function renderKaizen() {
+  document.getElementById('kaizenPrompt').textContent = '✨ ' + kP[new Date().getDay()];
+  document.getElementById('streakNum').textContent = S.streak;
+  document.getElementById('streakDots').innerHTML = Array.from({length:14},(_,i) => {
+    const done = i < S.streak, isToday = i === S.streak;
+    return `<div class="s-dot ${done?'done':isToday?'today':''}">${done?'✓':i+1}</div>`;
+  }).join('');
+  document.getElementById('kaizenEntries').innerHTML = S.kaizenEntries.length
+    ? S.kaizenEntries.slice().reverse().map(e=>`<div class="entry"><div class="entry-date">${e.date}</div>${e.text}</div>`).join('')
+    : '<p style="color:var(--muted);font-size:0.82rem;font-style:italic">Your wins will appear here 🌸</p>';
+}
+
+async function saveKaizen() {
+  const text = document.getElementById('kaizenText').value.trim();
+  if (!text) return;
+  const entry = { date: TODAY_STR, text };
+  try {
+    await dbInsert('kaizen', entry);
+    S.streak++;
+    await dbUpsertSingle('streak', { count: S.streak });
+    S.kaizenEntries.push(entry);
+    document.getElementById('kaizenText').value = '';
+    renderKaizen();
+    setSyncStatus(true, '✓ Kaizen entry saved');
+  } catch(e) {
+    setSyncStatus(false, '⚠ Could not save kaizen entry');
+  }
+}
+
+// ── JOURNAL ───────────────────────────────────────────────────────────────────
+const jP = [
+  'What made you smile today, even a little?',
+  'Where did you show up for yourself today?',
+  'What\'s one thing you want to release before tomorrow?',
+  'How did today bring you closer to June 1st?',
+  'What does the best version of you look like right now?',
+  'What are you most grateful for today?',
+  'What would you tell yourself from a month ago?',
+];
+
+function renderJournal() {
+  document.getElementById('journalPrompt').textContent = '📓 ' + jP[(new Date().getDay()+1)%7];
+  document.getElementById('journalEntries').innerHTML = S.journalEntries.length
+    ? S.journalEntries.slice().reverse().map(e=>`<div class="entry"><div class="entry-date">${e.date}</div>${e.text}</div>`).join('')
+    : '<p style="color:var(--muted);font-size:0.82rem;font-style:italic">Your thoughts will live here 🌸</p>';
+}
+
+async function saveJournal() {
+  const text = document.getElementById('journalText').value.trim();
+  if (!text) return;
+  const entry = { date: TODAY_STR, text };
+  try {
+    await dbInsert('journal', entry);
+    S.journalEntries.push(entry);
+    document.getElementById('journalText').value = '';
+    renderJournal();
+    setSyncStatus(true, '✓ Journal entry saved');
+  } catch(e) {
+    setSyncStatus(false, '⚠ Could not save journal entry');
+  }
+}
+
+// ── AI COACH ──────────────────────────────────────────────────────────────────
+const SYS = `You are Shravya's warm personal life coach. Her June 1st goals:
+- Weight: reach 121 lbs (ABRAM program: no sugar, 6K steps, healthy eating, supplements, workout)
+- Pass Claude Certified Architect exam (beginner, weekends only, MCQ style)
+- Pilates 3x/week
+- ABRAM daily habits: accelerator video, post wins, message accountability partner, pod meeting weekly
+- Anastasia face massage daily, skincare/haircare routines
+- Small talk skills, friendships, budgeting, CSX Technology work
+
+Philosophy: Progress NOT perfection. She's a recovering perfectionist.
+- Celebrate tiny wins enthusiastically
+- Never shame her for missing things
+- Keep responses SHORT (3-5 sentences), warm, conversational
+- She's an AI engineer at CSX using LangGraph, MCP, Pinecone, Claude — use this context
+- When asked for a quiz, give ONE beginner MCQ about Claude architecture`;
+
+async function callClaude(history, outDiv, btnId) {
+  document.getElementById(btnId).disabled = true;
+  const el = document.createElement('div');
+  el.className = 'msg loading'; el.textContent = 'thinking...';
+  outDiv.appendChild(el); outDiv.scrollTop = outDiv.scrollHeight;
+  try {
+    const checkedNames = [...S.checked].map(i=>wins[i].n).join(', ');
+    const system = SYS + (checkedNames ? `\nToday she did: ${checkedNames}.` : '') + (S.mood ? `\nMood: ${S.mood}.` : '');
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:1000, system, messages: history})
+    });
+    const data = await res.json();
+    el.remove();
+    const reply = data.content?.[0]?.text || 'I\'m here with you 🌸';
+    const msgEl = document.createElement('div');
+    msgEl.className = 'msg coach'; msgEl.textContent = reply;
+    outDiv.appendChild(msgEl); outDiv.scrollTop = outDiv.scrollHeight;
+    return reply;
+  } catch { el.textContent = 'Something went wrong — but I\'m still rooting for you! 🌸'; }
+  finally { document.getElementById(btnId).disabled = false; }
+}
+
+let coachH = [], examH = [];
+
+async function sendCoach() {
+  const input = document.getElementById('coachInput');
+  const msg = input.value.trim(); if (!msg) return;
+  const div = document.getElementById('coachMessages');
+  const el = document.createElement('div'); el.className='msg user'; el.textContent=msg;
+  div.appendChild(el); input.value=''; div.scrollTop=div.scrollHeight;
+  coachH.push({role:'user',content:msg});
+  const reply = await callClaude(coachH, div, 'coachSendBtn');
+  if (reply) coachH.push({role:'assistant',content:reply});
+}
+
+function quickPrompt(msg) { document.getElementById('coachInput').value=msg; sendCoach(); }
+
+async function sendExam() {
+  const input = document.getElementById('examInput');
+  const msg = input.value.trim(); if (!msg) return;
+  const div = document.getElementById('examMessages');
+  const el = document.createElement('div'); el.className='msg user'; el.textContent=msg;
+  div.appendChild(el); input.value=''; div.scrollTop=div.scrollHeight;
+  examH.push({role:'user',content:msg});
+  const reply = await callClaude(examH, div, 'examSendBtn');
+  if (reply) examH.push({role:'assistant',content:reply});
+}
+
+function examPrompt(msg) { document.getElementById('examInput').value=msg; sendExam(); }
+
+// ── START ─────────────────────────────────────────────────────────────────────
+initApp();
+</script>
+</body>
+</html>
